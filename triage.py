@@ -122,20 +122,26 @@ Use [] for fraud_flags if none.
 
 def route_decision(state: TriageState) -> TriageState:
     prompt = f"""You are an insurance claim router.
-Decide the routing queue using the inputs below.
+Apply these rules strictly and in order. Stop at the first rule that matches.
 
-Severity   : {state['severity']}
-Fraud score: {state['fraud_score']}
-Fraud flags: {state['fraud_flags']}
-Amount     : {state['claim_amount']:,.2f}
+Inputs:
+  severity   = {state['severity']}
+  fraud_score = {state['fraud_score']}
+  fraud_flags = {state['fraud_flags']}
+  amount     = {state['claim_amount']:,.2f}
 
-Routing rules:
-- fraud_review : fraud_score >= 0.6, OR multiple serious fraud flags
-- fast_track   : low severity, fraud_score < 0.2, complete documentation, no flags
-- standard     : everything else
+Rules (evaluate top to bottom; return the first match):
+  1. fraud_review  -- if fraud_score >= 0.6
+  2. fast_track    -- if severity == "low" AND fraud_score < 0.2 AND len(fraud_flags) == 0
+  3. standard      -- otherwise
+
+Notes:
+- A high-severity claim with a low fraud_score must NOT be routed to fraud_review.
+  Severity is about urgency / amount / complexity, not suspicion.
+- Do not invent extra rules. Use ONLY the three rules above.
 
 Respond ONLY with a JSON object of the shape:
-{{"decision": "fast_track|standard|fraud_review", "reason": "<one short sentence>"}}
+{{"decision": "fast_track|standard|fraud_review", "reason": "<one short sentence citing the rule number>"}}
 """
     data = _ask_json(prompt)
     state["decision"] = data["decision"]
